@@ -10,7 +10,7 @@
 | `params` | no | map | Default parameter values |
 | `phases` | yes | list | Ordered list of phase definitions |
 | `on_failure` | no | string | Global failure policy: `pause` (default), `skip`, `abort` |
-| `max_parallel` | no | int | Max concurrent phases (default: 4) |
+| `max_parallel` | no | int | Max concurrent phases (default: 10) |
 
 ## Phase Fields
 

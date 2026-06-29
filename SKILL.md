@@ -60,7 +60,7 @@ phases:
 ```
 1. Parse YAML → validate phase DAG (no cycles)
 2. Load/create state file → determine next ready phase(s)
-3. For each ready phase (up to max_parallel=4):
+3. For each ready phase (up to max_parallel=10):
    a. Expand {{placeholders}} with params + upstream phase outputs
    b. Invoke /orchestrate with phase prompt
    c. Wait for completion → capture output_file path + summary

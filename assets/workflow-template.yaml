@@ -36,4 +36,4 @@ phases:
 
 # Global settings
 # on_failure: pause           # pause | skip | abort
-# max_parallel: 4             # Max concurrent independent phases
+# max_parallel: 10             # Max concurrent independent phases
