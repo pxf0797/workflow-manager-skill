@@ -120,6 +120,11 @@ bash scripts/state.sh status <name> <phase-id> completed
 
 # Determine next ready phases
 bash scripts/next-phase.sh <yaml-path> <name>
+
+# Pipeline helpers (manual chaining fallback)
+bash scripts/pipeline-init.sh <name> <run1> <run2> ...
+bash scripts/pipeline-update.sh <name> <run-index> <status>
+bash scripts/pipeline-status.sh <name>
 ```
 
 ## Scenario Templates
@@ -152,3 +157,17 @@ Phases with `approval: true` pause after completion:
 4. On retry: re-run same phase (preserves retry count)
 5. On modify: prompt for new params, then re-run
 6. On abort: mark workflow failed, archive state
+
+## Scripts
+
+- `scripts/state.sh` — workflow state CRUD operations
+- `scripts/next-phase.sh` — reads workflow YAML + state, outputs next phase(s)
+- `scripts/pipeline-init.sh` — initialize manual pipeline state
+- `scripts/pipeline-update.sh` — update manual pipeline run status
+- `scripts/pipeline-status.sh` — read manual pipeline progress
+
+## References
+
+- [references/workflow-yaml-spec.md](references/workflow-yaml-spec.md) — Complete YAML format specification
+- [references/scenario-templates.md](references/scenario-templates.md) — Pre-built templates for 5 scenarios
+- [references/pipeline-chaining.md](references/pipeline-chaining.md) — Manual chaining guide (simpler alternative to YAML workflows)
