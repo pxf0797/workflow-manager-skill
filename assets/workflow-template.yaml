@@ -1,0 +1,39 @@
+# Workflow Manager Template
+# Fill in your workflow details below.
+# See references/workflow-yaml-spec.md for complete field documentation.
+
+name: "my-workflow"
+description: "Brief description of what this workflow accomplishes"
+
+params:
+  # Define default parameter values (overridden at invocation)
+  # topic: ""
+  # repo_path: "."
+
+phases:
+  # ── Phase 1 ──
+  - id: phase-1
+    description: "What this phase does"
+    prompt: |
+      Describe the orchestrator task for this phase.
+      Use {{params.KEY}} for parameters and {{phase.PHASE_ID.output_file}} for upstream outputs.
+    # depends_on: []           # Phase IDs this phase waits for
+    # approval: false          # Pause for user review after completion?
+    # timeout_minutes: 60      # Max phase duration
+    # retry: 1                 # Max retries on failure
+    # model: sonnet            # opus | sonnet | haiku
+    # verify: standard         # light | standard | strict
+
+  # ── Phase 2 ──
+  - id: phase-2
+    description: "Next phase"
+    prompt: |
+      Continue with the next phase.
+      Reference upstream: {{phase.phase-1.output_file}}
+    depends_on: [phase-1]
+
+  # ── Add more phases as needed ──
+
+# Global settings
+# on_failure: pause           # pause | skip | abort
+# max_parallel: 4             # Max concurrent independent phases
