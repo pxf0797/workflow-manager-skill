@@ -9,6 +9,7 @@
 #   status  <name> <phase-id> <status>        — Set phase status
 #   list                                       — List all active workflows
 #   archive <name>                             — Archive completed/failed workflow
+#   check-resumable                            — Detect in-progress workflows and classify as resumable/stale
 
 set -euo pipefail
 
@@ -190,6 +191,83 @@ cmd_list() {
     done
 }
 
+cmd_check_resumable() {
+    local now_epoch
+    now_epoch=$(date +%s)
+    local stale_threshold_seconds=$((30 * 60))  # 30 minutes
+
+    # Build JSON output via Python for proper encoding
+    python3 -c "
+import json, os, sys, time
+
+state_dir = os.path.expanduser('${STATE_DIR}')
+now = ${now_epoch}
+threshold = ${stale_threshold_seconds}
+
+resumable_list = []
+stale_list = []
+
+if not os.path.isdir(state_dir):
+    print(json.dumps({'resumable': [], 'stale': []}, indent=2, ensure_ascii=False))
+    sys.exit(0)
+
+for fname in os.listdir(state_dir):
+    if not fname.endswith('.json'):
+        continue
+    fpath = os.path.join(state_dir, fname)
+    try:
+        with open(fpath) as f:
+            state = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        continue
+
+    if state.get('status') != 'in_progress':
+        continue
+
+    name = fname[:-5]  # strip .json
+    updated_at_str = state.get('updated_at', '')
+    current_phase = state.get('current_phase') or 'unknown'
+
+    # Count completed vs total phases
+    phases = state.get('phases', {})
+    total = len(phases)
+    completed = sum(1 for p in phases.values() if p.get('status') == 'completed')
+    progress = f'{completed}/{total}'
+
+    # Parse updated_at timestamp
+    idle_minutes = None
+    if updated_at_str:
+        try:
+            import calendar, re
+            # Normalize: strip timezone offset (state.sh uses date -u +08:00
+            # which is UTC time with wrong suffix; treat as UTC always)
+            clean = re.sub(r'[+-]\d{2}:\d{2}$', '', updated_at_str.replace('Z', ''))
+            updated_epoch = calendar.timegm(time.strptime(clean, '%Y-%m-%dT%H:%M:%S'))
+            idle_seconds = now - updated_epoch
+            idle_minutes = int(idle_seconds / 60)
+        except Exception:
+            idle_minutes = None
+
+    entry = {
+        'name': name,
+        'status': 'in_progress',
+        'current_phase': current_phase,
+        'progress': progress,
+        'last_updated': updated_at_str,
+        'idle_minutes': idle_minutes or 0,
+    }
+
+    if idle_minutes is not None and idle_minutes >= 30:
+        entry['suggestion'] = '可能已废弃，建议 archive'
+        stale_list.append(entry)
+    else:
+        resumable_list.append(entry)
+
+output = {'resumable': resumable_list, 'stale': stale_list}
+print(json.dumps(output, indent=2, ensure_ascii=False))
+"
+}
+
 cmd_archive() {
     local name="$1"
     local state_path
@@ -211,8 +289,9 @@ case "${1:-}" in
     status)  shift; cmd_status "$@" ;;
     list)    cmd_list ;;
     archive) shift; cmd_archive "$@" ;;
+    check-resumable) cmd_check_resumable ;;
     *)
-        echo "Usage: state.sh {init|read|update|status|list|archive} <name> [args...]" >&2
+        echo "Usage: state.sh {init|read|update|status|list|archive|check-resumable} <name> [args...]" >&2
         exit 1
         ;;
 esac

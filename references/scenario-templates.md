@@ -160,32 +160,65 @@ params:
   target: ""
   metric: ""
   target_value: ""
+  improvement_threshold: 10    # 改善幅度阈值（百分比）
   max_iterations: 3
+  max_stagnant_iterations: 2   # 连续无改善的最大迭代次数
+
 phases:
   - id: measure
     description: "度量基线"
-    prompt: "测量 {{params.target}} 的 {{params.metric}} 当前值，建立基线。"
+    prompt: |
+      测量 {{params.target}} 的 {{params.metric}} 当前值。
+      **输出格式要求**: 在文件末尾追加一行 JSON:
+      ```json
+      {"metric_name": "{{params.metric}}", "metric_value": <数值>, "unit": "<单位>"}
+      ```
 
   - id: analyze
     description: "差距分析"
-    prompt: "对比基线 {{phase.measure.output_file}} 与目标 {{params.target_value}}，识别改进机会和优先级。"
-    depends_on: [measure]
+    prompt: |
+      分析改进空间，识别 Top-3 改进机会，按 ROI 排序。
+      参考基线: {{phase.measure.output_file}}
 
   - id: improve
     description: "实施改进"
-    prompt: "实施 {{phase.analyze.output_file}} 中优先级最高的改进项。每次迭代聚焦一个改进点。"
-    depends_on: [analyze]
+    prompt: |
+      实施最高优先级的改进项。
+      聚焦: {{phase.analyze.output_file}} 中的 Top-1 改进机会
     verify: standard
 
   - id: evaluate
-    description: "效果评估"
-    prompt: "重新测量 {{params.metric}}，对比改进前后。判断是否达到 {{params.target_value}}。"
+    description: "效果评估与收敛判断"
+    prompt: |
+      1. 重新测量 {{params.metric}}，提取当前值
+      2. 从上一轮 measure phase 提取基线值: {{phase.measure.output_file}}
+      3. 计算: 改善幅度(%) = (当前值 - 基线值) / 基线值 * 100
+      4. **自动收敛判断**:
+         - 改善幅度 >= {{params.improvement_threshold}}% → 建议继续
+         - 改善幅度 < {{params.improvement_threshold}}% → 本轮低效，记录
+         - 连续 {{params.max_stagnant_iterations}} 轮低效 → 建议终止
+         - 达到 {{params.target_value}} → 建议终止（目标达成）
+      5. 输出收敛分析 JSON:
+      ```json
+      {"current_value": <数值>, "baseline_value": <数值>, "improvement_pct": <百分比>, "target_reached": true|false, "recommendation": "continue|stop", "reason": "一句话理由"}
+      ```
     depends_on: [improve]
     approval: true
-    approval_question: "当前指标 vs 目标。继续下一轮改进还是结束？(已执行 N/{{params.max_iterations}} 轮)"
+    approval_question: |
+      收敛分析: 改善 {improvement_pct}%, 目标 {target_reached_str}。
+      建议: {recommendation}。继续下一轮还是结束？
 ```
 
 **Loop control:** The workflow manager tracks iteration count via state. After `evaluate` phase, if target not met and iterations < max, reset `measure`→`analyze`→`improve`→`evaluate` statuses and loop. Max `max_iterations` loops.
+
+### 收敛逻辑说明
+
+循环在以下任一条件满足时自动建议终止:
+1. **目标达成**: current_value >= target_value
+2. **连续低效**: 连续 max_stagnant_iterations 轮改善幅度 < improvement_threshold
+3. **达到最大迭代**: 已完成 max_iterations 轮
+
+每轮的 evaluate phase 会输出收敛分析 JSON，用户可在 approval gate 查看后决定。
 
 ## Template Selection Guide
 

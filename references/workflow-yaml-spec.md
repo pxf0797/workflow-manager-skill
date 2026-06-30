@@ -26,7 +26,8 @@
 | `timeout_minutes` | no | int | Max duration (default: 60) |
 | `retry` | no | int | Max retries on failure (default: 1) |
 | `model` | no | string | Override model for orchestrator: `opus`/`sonnet`/`haiku` |
-| `verify` | no | string | Verification level: `light`/`standard`/`strict` (default: `standard`) |
+| `verify` | no | string | Verification level: `light`/`standard`/`strict` (default: none) |
+| `verify_criteria` | no | list | Custom verification dimensions (strings passed to Verifier agent) |
 | `output_fields` | no | list | Fields to extract from orchestrator output for downstream phases |
 
 ## Template Variables

@@ -64,8 +64,12 @@ phases:
    a. Expand {{placeholders}} with params + upstream phase outputs
    b. Invoke /orchestrate with phase prompt
    c. Wait for completion → capture output_file path + summary
-   d. If phase has approval: true → pause, show results, wait for user
-   e. Update state → mark phase completed
+   d. If phase has verify: light|standard|strict:
+      - Run scripts/verify-phase.sh <output_file> <level>
+      - If signal == "needs_agent": spawn Verifier agent(s) with emitted prompt
+      - Verdict pass → continue; fail → retry (up to retry count), then mark failed
+   e. If phase has approval: true → pause, show results, wait for user
+   f. Update state → mark phase completed
 4. Repeat until all phases complete or failed
 5. Deliver final summary with per-phase stats
 ```
@@ -74,9 +78,11 @@ phases:
 
 - **`/workflow run <name>`** — Start or resume a workflow. Pass `--param key=value` for template variables.
 - **`/workflow status <name>`** — Show current phase progress, completed outputs, next phases.
-- **`/workflow resume`** — Auto-detect and resume the most recent in-progress workflow.
+- **`/workflow resume`** — Auto-detect and resume the most recent in-progress workflow. Internally calls `state.sh check-resumable` to find resumable workflows and automatically continues the most recent one.
 - **`/workflow list`** — List all workflows and their status.
 - **`/workflow archive <name>`** — Archive completed/failed workflow state.
+
+> **Auto-prompt on startup:** The Coordinator automatically runs `state.sh check-resumable` when starting. If resumable workflows are found, the user is prompted to resume the most recent one.
 
 ## YAML Format
 
@@ -93,9 +99,10 @@ Full spec: [references/workflow-yaml-spec.md](references/workflow-yaml-spec.md)
 | `approval` | bool | Pause for user review after phase |
 | `inputs` | map | `var: "{{phase_id.field}}"` for data passing |
 | `timeout_minutes` | int | Default 60 |
-| `retry` | int | Default 1 |
+| `retry` | int | Default 1; also applies to verify retries |
 | `model` | string | Override: `opus`/`sonnet`/`haiku` |
-| `verify` | string | `light`/`standard`/`strict` (default: standard) |
+| `verify` | string | Verification level: `light`/`standard`/`strict` (default: none) |
+| `verify_criteria` | list | Custom criteria strings for Verifier agent (optional) |
 
 ### Template variables
 
@@ -144,7 +151,7 @@ Use `assets/workflow-template.yaml` as a blank starting point.
 ## Failure Handling
 
 - **E1 (timeout/error):** Auto-retry up to `retry` count, then pause for user
-- **E2 (validation fail):** Re-run phase with validator feedback injected
+- **E2 (validation fail):** Re-run phase with Verifier feedback injected; retry up to `retry` count, then mark failed
 - **E3 (consecutive failures):** Pause workflow, suggest replan
 - **Interrupted workflow:** Resume from last completed phase via state file
 
@@ -162,6 +169,7 @@ Phases with `approval: true` pause after completion:
 
 - `scripts/state.sh` — workflow state CRUD operations
 - `scripts/next-phase.sh` — reads workflow YAML + state, outputs next phase(s)
+- `scripts/verify-phase.sh` — phase output auto-verification (light/standard/strict)
 - `scripts/pipeline-init.sh` — initialize manual pipeline state
 - `scripts/pipeline-update.sh` — update manual pipeline run status
 - `scripts/pipeline-status.sh` — read manual pipeline progress
